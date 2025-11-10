@@ -1,18 +1,13 @@
 CC = gcc
 CFLAGS := -ggdb3 -O2 -Wall -std=c11
 CFLAGS += -Wno-unused-function -Wvla
+FUSE_CFLAGS = $(shell pkg-config fuse --cflags)
+FUSE_LIBS = $(shell pkg-config fuse --libs)
 
-# Flags for FUSE
-LDLIBS := $(shell pkg-config fuse --cflags --libs)
-
-# Name for the filesystem!
 FS_NAME := fisopfs
+OBJS = fisopfs.o fs.o persistence.o
 
-all: $(FS_NAME)
-	
-format: .clang-files .clang-format
-	xargs -r clang-format -i <$<
-
+# === Docker ===
 build:
 	./dock build
 
@@ -22,7 +17,21 @@ run:
 exec:
 	./dock exec
 
-clean:
-	rm -rf $(EXEC) *.o core vgcore.* $(FS_NAME)
+# === Modo local (para debug fuera de Docker) ===
+local: $(FS_NAME)
 
-.PHONY: all build clean format docker-build docker-run docker-exec
+$(FS_NAME): $(OBJS)
+	$(CC) $(CFLAGS) $(FUSE_CFLAGS) $^ $(FUSE_LIBS) -o $@
+
+fisopfs.o: fisopfs.c fs.h persistence.h
+	$(CC) $(CFLAGS) $(FUSE_CFLAGS) -c fisopfs.c
+
+fs.o: fs.c fs.h
+	$(CC) $(CFLAGS) -c fs.c
+
+persistence.o: persistence.c persistence.h fs.h
+	$(CC) $(CFLAGS) -c persistence.c
+
+clean:
+	rm -f $(FS_NAME) $(OBJS) .clang-files
+	rm -rf prueba/
