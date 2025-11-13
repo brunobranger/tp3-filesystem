@@ -4,6 +4,11 @@
 #include <errno.h>
 #include <stdio.h>
 #include <unistd.h>
+// Estos 3 de aca abajo los agregue para que S_IFDIR no salga undefined
+#include <fcntl.h>
+#include <linux/stat.h>
+#include <sys/stat.h>
+#include <wine/msvcrt/sys/stat.h>
 
 // ============================================================================
 // INICIALIZACIÓN Y LIMPIEZA
@@ -23,6 +28,29 @@ fs_init(filesystem_t *fs)
 	// - Establecer nlink, parent_idx
 	// - Inicializar timestamps (atime, mtime, ctime)
 	// - Configurar entry_count, used_space, initialized
+
+	// Crear directorio raíz
+	fs_entry_t *root = &fs->entries[0];
+	strcpy(root->path, "/");
+	strcpy(root->name, "/");
+	root->type = ENTRY_DIR;
+	root->uid = getuid();
+	root->gid = getgid();
+	root->mode = S_IFDIR | 0755;
+	root->size = 0;
+	root->nlink = 2;
+	root->parent_idx = -1;
+	
+	time_t now = time(NULL);
+	root->atime = now;
+	root->mtime = now;
+	root->ctime = now;
+	
+	fs->entry_count = 1;
+	fs->used_space = 0;
+	fs->initialized = true;
+	
+	return 0;
 	
 	return 0;
 }
@@ -37,6 +65,16 @@ fs_destroy(filesystem_t *fs)
 	// - Recorrer todas las entradas
 	// - Si es archivo y tiene data, hacer free(data)
 	// - Marcar filesystem como no inicializado
+
+	// Liberar memoria de todos los archivos
+	for (int i = 0; i < fs->entry_count; i++) {
+		if (fs->entries[i].type == ENTRY_FILE && fs->entries[i].data != NULL) {
+			free(fs->entries[i].data);
+			fs->entries[i].data = NULL;
+		}
+	}
+	
+	fs->initialized = false;
 }
 
 // ============================================================================
@@ -47,7 +85,7 @@ bool
 fs_is_root(const char *path)
 {
 	// Your code here: Verificar si path es "/"
-	return false;
+	return path && strcmp(path, "/") == 0;
 }
 
 int
@@ -55,7 +93,15 @@ fs_path_depth(const char *path)
 {
 	// Your code here: Contar el número de '/' en el path
 	// Retornar 0 para la raíz
-	return 0;
+	if (!path || fs_is_root(path))
+		return 0;
+	
+	int depth = 0;
+	for (const char *p = path; *p; p++) {
+		if (*p == '/')
+			depth++;
+	}
+	return depth;
 }
 
 void
@@ -73,7 +119,38 @@ fs_split_path(const char *path, char *parent, char *name)
 	//   "/dir/file.txt" -> parent="/dir", name="file.txt"
 	//   "/" -> parent="/", name=""
 	// Hint: usar strrchr() para encontrar la última '/'
-}
+
+	// Caso especial: raíz
+	if (strcmp(path, "/") == 0) {
+		strcpy(parent, "/");
+		strcpy(name, "");
+		return;
+	}
+	
+	// Buscar la última barra
+	const char *last_slash = strrchr(path, '/');
+	
+	if (last_slash == NULL) {
+		// No hay barra (no debería pasar en paths bien formados)
+		strcpy(parent, "/");
+		strcpy(name, path);
+		return;
+	}
+	
+	// Copiar el nombre (después de la última barra)
+	strcpy(name, last_slash + 1);
+	
+	// Copiar el parent
+	if (last_slash == path) {
+		// Caso: "/archivo.txt" -> parent = "/"
+		strcpy(parent, "/");
+	} else {
+		// Caso: "/dir/archivo.txt" -> parent = "/dir"
+		size_t len = last_slash - path;
+		strncpy(parent, path, len);
+		parent[len] = '\0';
+	}
+}	
 
 // ============================================================================
 // BÚSQUEDA DE ENTRADAS
@@ -94,6 +171,13 @@ fs_find_entry(filesystem_t *fs, const char *path)
 	// - Comparar entry.path con path usando strcmp()
 	// - Retornar índice si se encuentra
 	// - Retornar -ENOENT si no existe
+	
+	// Buscar entrada por path
+	for (int i = 0; i < fs->entry_count; i++) {
+		if (strcmp(fs->entries[i].path, path) == 0) {
+			return i;
+		}
+	}
 	
 	return -ENOENT;
 }

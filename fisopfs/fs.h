@@ -23,6 +23,7 @@ typedef enum {
 
 // Estructura para metadatos de archivo
 typedef struct {
+	char path[MAX_PATH];     
 	char name[MAX_FILENAME];
 	entry_type_t type;
 	uid_t uid;

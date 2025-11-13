@@ -13,6 +13,7 @@
 
 #include "fs.h"
 #include "persistence.h"
+#include <linux/limits.h> // Para que PATH_MAX no salga undeefined
 
 #define DEFAULT_FILE_DISK "persistence_file.fisopfs"
 
@@ -175,7 +176,13 @@ fisopfs_open(const char *path, struct fuse_file_info *fi)
 	// 2. Si retorna < 0, retornar -ENOENT
 	// 3. Si existe, retornar 0
 	
-	return -ENOENT;
+	// Verificar que el archivo existe
+	int idx = fs_find_entry(&g_fs, path);
+	if (idx < 0) {
+		return -ENOENT;
+	}
+	
+	return 0;
 }
 
 static int
@@ -204,6 +211,16 @@ fisopfs_init(struct fuse_conn_info *conn)
 	// 2. Si retorna error, imprimir mensaje y llamar a exit(EXIT_FAILURE)
 	// 3. Imprimir mensaje de éxito
 	// 4. Retornar NULL
+
+	// Cargar filesystem desde disco
+	int res = persistence_load(filedisk_path, &g_fs);
+	if (res < 0) {
+		fprintf(stderr, "[error] init failed: %s\n", strerror(-res));
+		exit(EXIT_FAILURE);
+	}
+	
+	printf("[info] Filesystem initialized successfully\n");
+	return NULL;
 	
 	return NULL;
 }
@@ -218,6 +235,17 @@ fisopfs_destroy(void *private_data)
 	// 2. Si hay error, imprimir mensaje
 	// 3. Llamar a fs_destroy(&g_fs) para liberar memoria
 	// 4. Imprimir mensaje de éxito
+
+	// Persistir filesystem a disco antes de salir
+	int res = persistence_save(filedisk_path, &g_fs);
+	if (res < 0) {
+		fprintf(stderr, "[error] destroy save failed: %s\n", strerror(-res));
+	}
+	
+	// Limpiar estructuras
+	fs_destroy(&g_fs);
+	
+	printf("[info] Filesystem destroyed successfully\n");
 }
 
 // ============================================================================
@@ -229,6 +257,20 @@ static struct fuse_operations operations = {
 	// Ejemplo: .getattr = fisopfs_getattr,
 	// Completar con: readdir, read, write, create, mkdir, unlink, rmdir,
 	//                truncate, utimens, open, flush, init, destroy
+	.getattr = fisopfs_getattr,
+	.readdir = fisopfs_readdir,
+	.read = fisopfs_read,
+	.write = fisopfs_write,
+	.create = fisopfs_create,
+	.mkdir = fisopfs_mkdir,
+	.unlink = fisopfs_unlink,
+	.rmdir = fisopfs_rmdir,
+	.truncate = fisopfs_truncate,
+	.utimens = fisopfs_utimens,
+	.open = fisopfs_open,
+	.flush = fisopfs_flush,
+	.init = fisopfs_init,
+	.destroy = fisopfs_destroy,
 };
 
 // ============================================================================
@@ -261,7 +303,21 @@ main(int argc, char *argv[])
 	// 4. Si no, es relativo: snprintf(filedisk_path, sizeof(filedisk_path), "%s/%s", cwd, filedisk_name)
 	// 5. Imprimir mensaje con el path que se usará
 	
-	strcpy(filedisk_path, filedisk_name);  // PLACEHOLDER - reemplazar con código correcto
+	// Construir path absoluto para el archivo de persistencia
+	char cwd[PATH_MAX];
+	if (getcwd(cwd, sizeof(cwd)) == NULL) {
+		fprintf(stderr, "[error] getcwd failed\n");
+		return EXIT_FAILURE;
+	}
+	
+	// Si el path es relativo, convertir a absoluto
+	if (filedisk_name[0] == '/') {
+		strcpy(filedisk_path, filedisk_name);
+	} else {
+		snprintf(filedisk_path, sizeof(filedisk_path), "%s/%s", cwd, filedisk_name);
+	}
+	
+	printf("[info] Using persistence file: %s\n", filedisk_path);
 	
 	return fuse_main(argc, argv, &operations, NULL);
 }
