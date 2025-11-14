@@ -189,20 +189,55 @@ fs_find_entry(filesystem_t *fs, const char *path)
 int
 fs_create_file(filesystem_t *fs, const char *path, mode_t mode)
 {
-	if (!fs || !fs->initialized)
-		return -EINVAL;
-	
-	// Your code here: Crear archivo
-	// 1. Verificar que no se exceda MAX_FILES
-	// 2. Verificar que el archivo no exista ya (usar fs_find_entry)
-	// 3. Separar path en parent y name (usar fs_split_path)
-	// 4. Verificar que el directorio padre exista y sea un directorio
-	// 5. Crear nueva entrada en fs->entries[fs->entry_count]
-	// 6. Inicializar todos los campos (path, name, type, uid, gid, mode, etc.)
-	// 7. Incrementar fs->entry_count
-	// 8. Retornar 0 si éxito
-	
-	return -ENOSPC;
+	if (!fs || !fs->initialized || !path)
+        return -EINVAL;
+
+    if (fs->entry_count >= MAX_FILES)
+        return -ENOSPC;
+
+    if (fs_find_entry(fs, path) >= 0)
+        return -EEXIST;
+
+    char parent[MAX_PATH_LEN];
+    char name[MAX_NAME_LEN];
+    fs_split_path(path, parent, name);
+
+    if (strlen(name) == 0)
+        return -EINVAL; 
+
+    int parent_idx = fs_find_entry(fs, parent);
+    if (parent_idx < 0)
+        return -ENOENT;
+
+    fs_entry_t *p = &fs->entries[parent_idx];
+    if (p->type != ENTRY_DIR)
+        return -ENOTDIR;
+
+    int idx = fs->entry_count;
+    fs_entry_t *entry = &fs->entries[idx];
+    memset(entry, 0, sizeof(fs_entry_t));
+
+    strcpy(entry->path, path);
+    strcpy(entry->name, name);
+
+    entry->type = ENTRY_FILE;
+    entry->uid  = getuid();
+    entry->gid  = getgid();
+    entry->mode = S_IFREG | (mode & 0777);
+
+    entry->size = 0;
+    entry->nlink = 1;
+    entry->parent_idx = parent_idx;
+    entry->data = NULL;
+
+    time_t now = time(NULL);
+    entry->atime = now;
+    entry->mtime = now;
+    entry->ctime = now;
+
+    fs->entry_count++;
+
+    return 0;
 }
 
 int
@@ -213,26 +248,29 @@ fs_read_file(filesystem_t *fs,
              off_t offset)
 {
 	if (!fs || !fs->initialized || !buffer)
-		return -EINVAL;
-	
-	int idx = fs_find_entry(fs, path);
-	if (idx < 0)
-		return -ENOENT;
-	
-	fs_entry_t *entry = &fs->entries[idx];
-	
-	if (entry->type != ENTRY_FILE)
-		return -EISDIR;
-	
-	// Your code here: Leer archivo
-	// 1. Actualizar entry->atime
-	// 2. Verificar que entry->data no sea NULL y entry->size > 0
-	// 3. Verificar que offset esté dentro del archivo
-	// 4. Calcular bytes_to_read (cuidado con el límite)
-	// 5. Copiar datos con memcpy(buffer, entry->data + offset, bytes_to_read)
-	// 6. Retornar número de bytes leídos
-	
-	return 0;
+        return -EINVAL;
+
+    int idx = fs_find_entry(fs, path);
+    if (idx < 0)
+        return -ENOENT;
+
+    fs_entry_t *entry = &fs->entries[idx];
+
+    if (entry->type != ENTRY_FILE)
+        return -EISDIR;
+
+    entry->atime = time(NULL);
+
+    if (!entry->data || entry->size == 0 || offset >= entry->size)
+        return 0;
+
+    size_t available = entry->size - offset;
+
+    size_t to_read = (size < available) ? size : available;
+
+    memcpy(buffer, entry->data + offset, to_read);
+
+    return (int)to_read;
 }
 
 int
@@ -321,15 +359,61 @@ fs_unlink_file(filesystem_t *fs, const char *path)
 int
 fs_create_dir(filesystem_t *fs, const char *path, mode_t mode)
 {
-	if (!fs || !fs->initialized)
+	if (!fs || !fs->initialized || !path)
 		return -EINVAL;
-	
-	// Your code here: Crear directorio
-	// Similar a fs_create_file() pero:
-	// - type = ENTRY_DIR
-	// - nlink = 2 (por . y ..)
-	// - Actualizar nlink del padre (incrementar por el ..)
-	
+
+	// sin lugar
+	if (fs->entry_count >= MAX_FILES)
+		return -ENOSPC;
+
+	if (fs_find_entry(fs, path) >= 0)
+		return -EEXIST;
+
+	char parent[MAX_PATH];
+	char name[MAX_FILENAME];
+	fs_split_path(path, parent, name);
+
+	//no permitir crear la raiz ni nombres vacios
+	if (strlen(name) == 0)
+		return -EINVAL;
+
+	//el padre debe existir
+	int parent_idx = fs_find_entry(fs, parent);
+	if (parent_idx < 0)
+		return -ENOENT;
+
+	fs_entry_t *p = &fs->entries[parent_idx];
+	if (p->type != ENTRY_DIR)
+		return -ENOTDIR;
+
+	int idx = fs->entry_count;
+	fs_entry_t *entry = &fs->entries[idx];
+	memset(entry, 0, sizeof(fs_entry_t));
+
+	strncpy(entry->path, path, MAX_PATH - 1);
+	entry->path[MAX_PATH - 1] = '\0';
+	strncpy(entry->name, name, MAX_FILENAME - 1);
+	entry->name[MAX_FILENAME - 1] = '\0';
+
+	entry->type = ENTRY_DIR;
+	entry->uid  = getuid();
+	entry->gid  = getgid();
+	entry->mode = S_IFDIR | (mode & 0777);
+
+	entry->size = 0;
+	entry->nlink = 2;    
+	entry->parent_idx = parent_idx;
+	entry->data = NULL;          //revisar
+
+	time_t now = time(NULL);
+	entry->atime = now;
+	entry->mtime = now;
+	entry->ctime = now;
+
+	p->nlink++;
+
+	fs->entry_count++;
+
 	return 0;
 }
 
