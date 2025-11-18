@@ -304,8 +304,36 @@ fs_write_file(filesystem_t *fs,
 	// 4. Copiar datos con memcpy(entry->data + offset, buffer, size)
 	// 5. Actualizar entry->atime y entry->mtime
 	// 6. Retornar número de bytes escritos
-	
-	return 0;
+
+	size_t new_size = offset + size;
+	if(new_size > MAX_FILE_SIZE){
+		return -ENOSPC;
+	}
+
+	if(new_size > entry->size){
+		size_t diff = new_size - entry->size;
+
+		if(fs->used_space + diff > MAX_FS_SIZE)
+			return -ENOSPC;
+		
+		char *new_data = realloc(entry->data, new_size);
+		if (!new_data)
+			return -ENOMEM;
+		
+		entry->data = new_data;
+		if(offset > entry->size){
+			memset(entry->data + entry->size, 0, offset - entry->size);
+		}
+		fs->used_space += diff;
+		entry->size = new_size;
+	}
+		
+	memcpy(entry->data + offset, buffer, size);
+		
+	entry->atime = time(NULL);
+	entry->mtime = entry->atime;
+
+	return size;
 }
 
 int
@@ -327,7 +355,45 @@ fs_truncate_file(filesystem_t *fs, const char *path, off_t size)
 	// 6. Si agrandamos, llenar nueva parte con zeros
 	// 7. Actualizar fs->used_space (sumar o restar según corresponda)
 	// 8. Actualizar entry->size, entry->mtime, entry->ctime
+
+	fs_entry_t *entry = &fs->entries[idx];
+
+	if(entry->type != ENTRY_FILE){
+		return -EISDIR;
+	}
+
+	if(size > MAX_FILE_SIZE){
+		return -EFBIG;
+	}
+
+	size_t old_size = entry->size;
+
+	if(size == old_size){
+		return 0;
+	}
+
+	if(size > old_size){
+		size_t diff = size - old_size;
+		if(fs->used_space + diff > MAX_FS_SIZE)
+			return -ENOSPC;
+	}
+
+	char *new_data = realloc(entry->data, size);
+	if(!new_data && size > 0)
+		return -ENOMEM;
 	
+	entry->data = new_data;
+
+	if(size > old_size){
+		memset(entry->data + old_size, 0, size - old_size);
+	}
+
+	fs->used_space += long(size) - long(old_size);
+
+	entry->size = size;
+	entry->mtime = time(NULL);
+	entrt->ctime = entry->mtime;
+
 	return 0;
 }
 
@@ -348,7 +414,32 @@ fs_unlink_file(filesystem_t *fs, const char *path)
 	// 4. Mover última entrada a este hueco (si no es la última)
 	// 5. Actualizar parent_idx de entradas que apuntaban a la última
 	// 6. Decrementar fs->entry_count
-	
+
+	fs_entry_t *entry = &fs->entries[idx];
+
+	if(entry->type != ENTRY_FILE){
+		return -EISDIR;
+	}
+
+	if(entry->data != NULL){
+		free(entry->data);
+		entry->data = NULL;
+	}
+	fs->used_space -= entry->size;
+
+	int last = fs->entry_count - 1;
+
+	if(idx != last){
+		fs->entries[idx] = fs->entries[last];
+
+		for(int i = 0; i < fs->entry_count; i++){
+			if(fs->entries[i].parent_idx == last){
+				fs->entries[i].parent_idx = idx;
+			}
+		}
+	}
+	fs->entry_count--;
+
 	return 0;
 }
 
@@ -436,6 +527,34 @@ fs_remove_dir(filesystem_t *fs, const char *path)
 	// 5. Actualizar parent_idx de entradas que apuntaban a la última
 	// 6. Decrementar fs->entry_count
 	
+	fs_entry_t *dir = &fs->entries[idx];
+
+	if(dir->type != ENTRY_DIR){
+		return -ENOTDIR;
+	}
+
+	for(int i = 0; i < fs->entry_count; i++){
+		if(fs->entries[i].parent_idx == idx)
+			return -ENOTEMPTY;
+	}
+
+	int parent = dir->parent_idx;
+	if(parent >= 0){
+		fs->entries[parent].nlink--;
+	}
+
+	int last = fs->entry_count - 1;
+
+	if(idx != last){
+		fs->entries[idx] = fs->entries[last];
+	}
+
+	for(int i = 0; i < fs->entry_count; i++){
+		if(fs->entries[i].parent_idx == last)
+			fs->entries[i].parent_idx = idx;
+	}
+	fs->entry_count--;
+
 	return 0;
 }
 
@@ -458,9 +577,39 @@ fs_read_dir(filesystem_t *fs, const char *path, char ***entries, int *count)
 	// 6. Asignar *entries = array y *count = num_entries
 	// 7. Retornar 0
 	
-	*count = 0;
-	*entries = NULL;
-	
+	fs_entry_t *dir = &fs->entries[idx];
+
+	if(dir->type != ENTRY_DIR){
+		return -ENOTDIR;
+	}
+
+	int num = 0;
+	for(int i = 0; i < fs->entry_count; i++){
+		if(fs->entries[i].parent_idx == idx)
+			num++;
+	}
+
+	char **arr = malloc(num * sizeof(char *));
+	if(!arr)
+		return -ENOMEM;
+
+	int pos = 0;
+	for(int i = 0; i < fs->entry_count; i++){
+		if(fs->entries[i].parent_idx == idx){
+			arr[pos] = strdup(fs->entries[i].name);
+			if(!arr[pos]){
+				for(int j = 0; j < pos; j++)
+					free(arr[j]);
+				free(arr);
+				return -ENOMEM;
+			}
+			pos++;
+		}
+	}
+
+	*count = num;
+	*entries = arr;
+
 	return 0;
 }
 
@@ -483,6 +632,14 @@ fs_getattr(filesystem_t *fs, const char *path, struct stat *st)
 	// Your code here: Llenar struct stat
 	// Copiar: uid, gid, mode, size, atime, mtime, ctime, nlink
 	memset(st, 0, sizeof(struct stat));
+	st->st_uid = entry->uid;
+	st->st_gid = entry->gid;
+	st->st_mode = entry->mode;
+	st->st_size = entry->size;
+	st->st_atime = entry->atime;
+	st->st_mtime = entry->mtime;
+	st->st_ctime = entry->ctime;
+	st->st_nlink = entry->nlink;
 	
 	return 0;
 }

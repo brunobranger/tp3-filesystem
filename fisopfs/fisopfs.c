@@ -30,11 +30,14 @@ static char filedisk_path[2 * PATH_MAX];
 static int
 fisopfs_getattr(const char *path, struct stat *st)
 {
-	printf("[debug] fisopfs_getattr - path: %s\n", path);
+	printf("[debug] fisopfs_getattr - path: %s\n", path);	
 	
 	// Your code here: Llamar a fs_getattr(&g_fs, path, st)
 	// Manejar el código de error retornado
-	
+	int res = fs_getattr(&g_fs,path,st);
+	if(res < 0){
+		return res;
+	}
 	return -ENOENT;
 }
 
@@ -60,8 +63,21 @@ fisopfs_readdir(const char *path,
 	//    - Liberar entries[i] con free()
 	// 5. Liberar el array entries con free()
 	// 6. Retornar 0
+
+	char **entries =  NULL;
+	int count = 0;
+
+	int res = fs_read_dir(&g_fs, path, &entries, &count);
+	if(res < 0){
+		return res;
+	}
+	for(int i = 0; i < count; i++){
+		filler(buffer,entries[i], NULL, 0);
+		free(entries[i]);
+	}
+	free(entries);
 	
-	return -ENOENT;
+	return 0;
 }
 
 static int
@@ -76,8 +92,7 @@ fisopfs_read(const char *path,
 	
 	// Your code here: Llamar a fs_read_file(&g_fs, path, buffer, size, offset)
 	// Retornar el número de bytes leídos o código de error
-	
-	return -ENOENT;
+	return fs_read_file(&g_fs, path, buffer, size, offset);
 }
 
 static int
@@ -92,8 +107,7 @@ fisopfs_write(const char *path,
 	
 	// Your code here: Llamar a fs_write_file(&g_fs, path, buffer, size, offset)
 	// Retornar el número de bytes escritos o código de error
-	
-	return -ENOENT;
+	return fs_write_file(&g_fs, path, buffer, size, offset);
 }
 
 static int
@@ -103,8 +117,11 @@ fisopfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 	
 	// Your code here: Llamar a fs_create_file(&g_fs, path, S_IFREG | mode)
 	// Retornar 0 si éxito o código de error
-	
-	return -ENOSPC;
+	int res = fs_create_file(&g_fs, path, S_IFREG | mode);
+	if(res < 0){
+		return res;
+	}
+	return 0;
 }
 
 static int
@@ -114,8 +131,11 @@ fisopfs_mkdir(const char *path, mode_t mode)
 	
 	// Your code here: Llamar a fs_create_dir(&g_fs, path, S_IFDIR | mode)
 	// Retornar 0 si éxito o código de error
-	
-	return -ENOSPC;
+	int res = fs_create_dir(&g_fs, path, S_IFDIR | mode);
+	if(res < 0){
+		return res;
+	}
+	return 0;
 }
 
 static int
@@ -125,8 +145,7 @@ fisopfs_unlink(const char *path)
 	
 	// Your code here: Llamar a fs_unlink_file(&g_fs, path)
 	// Retornar 0 si éxito o código de error
-	
-	return -ENOENT;
+	return fs_unlink_file(&g_fs, path);
 }
 
 static int
@@ -136,8 +155,7 @@ fisopfs_rmdir(const char *path)
 	
 	// Your code here: Llamar a fs_remove_dir(&g_fs, path)
 	// Retornar 0 si éxito o código de error
-	
-	return -ENOENT;
+	return fs_remove_dir(&g_fs, path);
 }
 
 static int
@@ -147,8 +165,8 @@ fisopfs_truncate(const char *path, off_t size)
 	
 	// Your code here: Llamar a fs_truncate_file(&g_fs, path, size)
 	// Retornar 0 si éxito o código de error
-	
-	return -ENOENT;
+
+	return fs_truncate_file(&g_fs, path, size);
 }
 
 static int
