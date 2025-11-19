@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "fs.h"
 #include <string.h>
 #include <stdlib.h>
@@ -8,7 +9,6 @@
 #include <fcntl.h>
 #include <linux/stat.h>
 #include <sys/stat.h>
-#include <wine/msvcrt/sys/stat.h>
 
 // ============================================================================
 // INICIALIZACIÓN Y LIMPIEZA
@@ -49,8 +49,6 @@ fs_init(filesystem_t *fs)
 	fs->entry_count = 1;
 	fs->used_space = 0;
 	fs->initialized = true;
-	
-	return 0;
 	
 	return 0;
 }
@@ -198,8 +196,8 @@ fs_create_file(filesystem_t *fs, const char *path, mode_t mode)
     if (fs_find_entry(fs, path) >= 0)
         return -EEXIST;
 
-    char parent[MAX_PATH_LEN];
-    char name[MAX_NAME_LEN];
+    char parent[MAX_PATH];
+    char name[MAX_FILENAME];
     fs_split_path(path, parent, name);
 
     if (strlen(name) == 0)
@@ -388,11 +386,11 @@ fs_truncate_file(filesystem_t *fs, const char *path, off_t size)
 		memset(entry->data + old_size, 0, size - old_size);
 	}
 
-	fs->used_space += long(size) - long(old_size);
+	fs->used_space += (long)size - (long)old_size;
 
 	entry->size = size;
 	entry->mtime = time(NULL);
-	entrt->ctime = entry->mtime;
+	entry->ctime = entry->mtime;
 
 	return 0;
 }
@@ -580,7 +578,7 @@ fs_read_dir(filesystem_t *fs, const char *path, char ***entries, int *count)
 	fs_entry_t *dir = &fs->entries[idx];
 
 	if(dir->type != ENTRY_DIR){
-		return -ENOTDIR;
+    	return -ENOTDIR;
 	}
 
 	int num = 0;
@@ -588,14 +586,19 @@ fs_read_dir(filesystem_t *fs, const char *path, char ***entries, int *count)
 		if(fs->entries[i].parent_idx == idx)
 			num++;
 	}
-
 	char **arr = malloc(num * sizeof(char *));
 	if(!arr)
 		return -ENOMEM;
 
 	int pos = 0;
 	for(int i = 0; i < fs->entry_count; i++){
-		if(fs->entries[i].parent_idx == idx){
+		if(fs->entries[i].parent_idx == idx) {
+			// Saltar la raiz para evitar que se liste a si misma
+			if(i == 0 && idx == 0) {
+				num--;
+				continue;
+			}
+
 			arr[pos] = strdup(fs->entries[i].name);
 			if(!arr[pos]){
 				for(int j = 0; j < pos; j++)
@@ -606,7 +609,6 @@ fs_read_dir(filesystem_t *fs, const char *path, char ***entries, int *count)
 			pos++;
 		}
 	}
-
 	*count = num;
 	*entries = arr;
 
@@ -654,10 +656,22 @@ fs_update_times(filesystem_t *fs, const char *path, const struct timespec tv[2])
 	if (idx < 0)
 		return -ENOENT;
 	
-	// Your code here: Actualizar timestamps
-	// tv[0] = access time, tv[1] = modification time
-	// Si tv es NULL, usar time(NULL) para ambos
-	// Siempre actualizar ctime = time(NULL)
+	fs_entry_t *entry = &fs->entries[idx];
+	
+	// Actualizar timestamps
+	if (tv) {
+		// Si se proporcionan tiempos específicos
+		entry->atime = tv[0].tv_sec;  // tv[0] = access time
+		entry->mtime = tv[1].tv_sec;  // tv[1] = modification time
+	} else {
+		// Si tv es NULL, usar tiempo actual para ambos
+		time_t now = time(NULL);
+		entry->atime = now;
+		entry->mtime = now;
+	}
+	
+	// Siempre actualizar ctime (change time) al tiempo actual
+	entry->ctime = time(NULL);
 	
 	return 0;
 }

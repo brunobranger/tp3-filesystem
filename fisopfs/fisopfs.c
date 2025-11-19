@@ -1,4 +1,5 @@
 #define FUSE_USE_VERSION 26
+#define _GNU_SOURCE  
 
 #include <fuse.h>
 #include <stdio.h>
@@ -13,7 +14,10 @@
 
 #include "fs.h"
 #include "persistence.h"
-#include <linux/limits.h> // Para que PATH_MAX no salga undeefined
+#include <linux/limits.h> // Para que PATH_MAX no salga undefined
+// Para que S_IFDIR no salga como undefined
+#include <linux/stat.h>
+#include <fcntl.h>
 
 #define DEFAULT_FILE_DISK "persistence_file.fisopfs"
 
@@ -34,11 +38,11 @@ fisopfs_getattr(const char *path, struct stat *st)
 	
 	// Your code here: Llamar a fs_getattr(&g_fs, path, st)
 	// Manejar el código de error retornado
-	int res = fs_getattr(&g_fs,path,st);
+	int res = fs_getattr(&g_fs, path,st);
 	if(res < 0){
 		return res;
 	}
-	return -ENOENT;
+	return 0;
 }
 
 static int
@@ -212,7 +216,11 @@ fisopfs_flush(const char *path, struct fuse_file_info *fi)
 	// Llamar a persistence_save(filedisk_path, &g_fs)
 	// Retornar el código de error o 0 si éxito
 	
-	return 0;
+	int res = persistence_save(filedisk_path, &g_fs);
+	if (res < 0) {
+    	fprintf(stderr, "[error] flush failed: %s\n", strerror(-res));
+	}
+	return res;
 }
 
 // ============================================================================
@@ -238,9 +246,7 @@ fisopfs_init(struct fuse_conn_info *conn)
 	}
 	
 	printf("[info] Filesystem initialized successfully\n");
-	return NULL;
-	
-	return NULL;
+	return NULL;	
 }
 
 static void

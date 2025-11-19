@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <stddef.h>
+#include <stdlib.h>     /
 
 bool
 persistence_file_exists(const char *filepath)
