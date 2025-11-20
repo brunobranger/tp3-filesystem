@@ -481,8 +481,8 @@ fs_create_dir(filesystem_t *fs, const char *path, mode_t mode)
 
 	strncpy(entry->path, path, MAX_PATH - 1);
 	entry->path[MAX_PATH - 1] = '\0';
-	strncpy(entry->name, name, MAX_FILENAME - 1);
-	entry->name[MAX_FILENAME - 1] = '\0';
+	strncpy(entry->name, name, MAX_FILENAME);
+	entry->name[MAX_FILENAME - 1] = '\0'; // Forzar null terminator siempre
 
 	entry->type = ENTRY_DIR;
 	entry->uid  = getuid();
@@ -593,11 +593,6 @@ fs_read_dir(filesystem_t *fs, const char *path, char ***entries, int *count)
 	int pos = 0;
 	for(int i = 0; i < fs->entry_count; i++){
 		if(fs->entries[i].parent_idx == idx) {
-			// Saltar la raiz para evitar que se liste a si misma
-			if(i == 0 && idx == 0) {
-				num--;
-				continue;
-			}
 
 			arr[pos] = strdup(fs->entries[i].name);
 			if(!arr[pos]){

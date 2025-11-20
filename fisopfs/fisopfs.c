@@ -181,7 +181,7 @@ fisopfs_utimens(const char *path, const struct timespec ts[2])
 	// Your code here: Llamar a fs_update_times(&g_fs, path, ts)
 	// Retornar 0 si éxito o código de error
 	
-	return 0;
+	return fs_update_times(&g_fs, path, ts);
 }
 
 // ============================================================================

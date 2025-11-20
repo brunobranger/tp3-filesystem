@@ -5,7 +5,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <stddef.h>
-#include <stdlib.h>     /
+#include <stdlib.h>     
 
 bool
 persistence_file_exists(const char *filepath)
@@ -120,9 +120,8 @@ persistence_save(const char *filename, const filesystem_t *fs)
 
 	fclose(file);
 	printf("[info] Filesystem saved to %s (%d entries)\n", filename, fs->entry_count);
-	return 0;
 	
-	return -EIO;
+	return 0;
 }
 
 int
@@ -270,10 +269,7 @@ persistence_load(const char *filename, filesystem_t *fs)
 
 	fclose(file);
 	printf("[info] Filesystem loaded from %s (%d entries, %zu bytes used)\n", filename, fs->entry_count, fs->used_space);
+
 	
 	return 0;
-
-
-	
-	return -EIO;
 }
