@@ -454,6 +454,73 @@ else
 fi
 
 # ============================================================================
+# PRUEBAS DE DISCO LLENO
+# ============================================================================
+
+print_test "30. Prueba de saturación de espacio (ENOSPC)"
+dd if=/dev/zero of="$MOUNT_POINT/full_disk.img" bs=1M count=20 2>&1 | grep "No space left on device"
+RES=$?
+if [ $RES -eq 0 ]; then
+    print_success "El sistema detectó correctamente la falta de espacio"
+else
+    if [ -f "$MOUNT_POINT/full_disk.img" ]; then
+        ACTUAL_SIZE=$(stat -c %s "$MOUNT_POINT/full_disk.img")
+        print_warning "Cuidado: Se permitió escribir $ACTUAL_SIZE bytes. ¿Cuál es tu límite MAX_FS_SIZE?"
+    else
+        print_error "Falló pero no con el mensaje esperado de espacio"
+    fi
+fi
+rm -f "$MOUNT_POINT/full_disk.img"
+
+# ============================================================================
+# PRUEBAS DE LIMITE DE ARCHIVO
+# ============================================================================
+
+print_test "31. Prueba de límite de cantidad de archivos"
+mkdir "$MOUNT_POINT/many_files" 2>/dev/null
+COUNT=0
+# Intentar crear 1000 archivos vacíos. Debería fallar antes de llegar a mil.
+for i in {1..1000}; do
+    touch "$MOUNT_POINT/many_files/f$i" 2>/dev/null
+    if [ $? -ne 0 ]; then
+        echo "DEBUG: Límite alcanzado en archivo #$i"
+        break
+    fi
+    ((COUNT++))
+done
+
+if [ "$COUNT" -lt 1000 ]; then
+    print_success "El sistema tiene un límite de archivos (se detuvo en $COUNT)"
+else
+    print_info "Se crearon 1000 archivos. ¿Tienes un límite definido?"
+fi
+# Limpieza masiva (puede tardar un poco)
+rm -rf "$MOUNT_POINT/many_files"
+
+# ============================================================================
+# PRUEBAS DE TRUNCADO
+# ============================================================================
+
+print_test "32. Prueba de truncate específico"
+echo "12345" > "$MOUNT_POINT/trunc.txt"
+truncate -s 10 "$MOUNT_POINT/trunc.txt"
+SIZE=$(stat -c %s "$MOUNT_POINT/trunc.txt")
+if [ "$SIZE" -eq 10 ]; then
+    print_success "Truncate (agrandar) funcionó"
+else
+    print_error "Fallo al agrandar (tamaño: $SIZE)"
+fi
+
+truncate -s 2 "$MOUNT_POINT/trunc.txt"
+CONTENT=$(cat "$MOUNT_POINT/trunc.txt")
+if [ "$CONTENT" = "12" ]; then
+    print_success "Truncate (achicar) funcionó"
+else
+    print_error "Fallo al achicar (contenido: '$CONTENT')"
+fi
+rm "$MOUNT_POINT/trunc.txt"
+
+# ============================================================================
 # RESUMEN
 # ============================================================================
 
