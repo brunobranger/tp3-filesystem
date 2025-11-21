@@ -18,8 +18,6 @@ persistence_file_exists(const char *filepath)
 	
 	struct stat st;
 	return stat(filepath, &st) == 0;
-	
-	return false;
 }
 
 bool
@@ -43,8 +41,6 @@ persistence_is_valid(const char *filepath)
 	fclose(f);
 	
 	return read == 4 && strcmp(magic, MAGIC_NUMBER) == 0;
-	
-	return false;
 }
 
 int
