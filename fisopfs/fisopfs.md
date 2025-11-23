@@ -404,32 +404,24 @@ El script verifica que el código de salida de valgrind sea 0 (sin fugas detecta
 ![Resultados de pruebas de leak de memoria](images/valgrind_exito.png)
 
 
-## Explicación breve de compilación
+## Compilación
 
-**En Docker (recomendado):**
+**En Docker**
 ```bash
-# Construir imagen con dependencias FUSE
 ./dock build
 
-# Entrar al contenedor
 ./dock run
 
-# Dentro del contenedor, compilar
 make local
 
-# Ejecutar
 ./fisopfs -f prueba/
 ```
-**Localmente (requiere FUSE 2 instalado):**
+**Localmente:**
 ```bash
-# En Arch/Manjaro: sudo pacman -S fuse2 pkg-config
-# En Ubuntu/Debian: sudo apt install pkg-config libfuse2 libfuse-dev
+# sudo apt install pkg-config libfuse2 libfuse-dev
 
-# Compilar
 make local
 
-# Ejecutar
 ./fisopfs -f prueba/
 ```
 
-Diferencia: Docker provee un ambiente controlado con todas las dependencias. Localmente necesitás instalar FUSE 2 manualmente. El target local usa pkg-config para obtener los flags de compilación de FUSE.
