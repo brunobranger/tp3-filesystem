@@ -12,18 +12,15 @@
 #define MAX_FILENAME 256
 #define MAX_PATH 512
 #define MAX_FILE_SIZE (10 * 1024 * 1024)  // 10MB por archivo
-#define MAX_FS_SIZE (50 * 1024 * 1024)     // 50MB total
+#define MAX_FS_SIZE (50 * 1024 * 1024)    // 50MB total
 #define MAX_DIR_DEPTH 8
 
 // Tipos de entrada
-typedef enum {
-	ENTRY_FILE,
-	ENTRY_DIR
-} entry_type_t;
+typedef enum { ENTRY_FILE, ENTRY_DIR } entry_type_t;
 
 // Estructura para metadatos de archivo
 typedef struct {
-	char path[MAX_PATH];     
+	char path[MAX_PATH];
 	char name[MAX_FILENAME];
 	entry_type_t type;
 	uid_t uid;
@@ -34,10 +31,10 @@ typedef struct {
 	time_t mtime;  // modification time
 	time_t ctime;  // change time
 	int nlink;     // número de hard links
-	
+
 	// Para archivos
 	char *data;
-	
+
 	// Para directorios
 	int parent_idx;  // índice del directorio padre (-1 para root)
 } fs_entry_t;
@@ -60,8 +57,16 @@ void fs_destroy(filesystem_t *fs);
 
 // Operaciones sobre archivos
 int fs_create_file(filesystem_t *fs, const char *path, mode_t mode);
-int fs_read_file(filesystem_t *fs, const char *path, char *buffer, size_t size, off_t offset);
-int fs_write_file(filesystem_t *fs, const char *path, const char *buffer, size_t size, off_t offset);
+int fs_read_file(filesystem_t *fs,
+                 const char *path,
+                 char *buffer,
+                 size_t size,
+                 off_t offset);
+int fs_write_file(filesystem_t *fs,
+                  const char *path,
+                  const char *buffer,
+                  size_t size,
+                  off_t offset);
 int fs_truncate_file(filesystem_t *fs, const char *path, off_t size);
 int fs_unlink_file(filesystem_t *fs, const char *path);
 
@@ -72,7 +77,9 @@ int fs_read_dir(filesystem_t *fs, const char *path, char ***entries, int *count)
 
 // Operaciones generales
 int fs_getattr(filesystem_t *fs, const char *path, struct stat *st);
-int fs_update_times(filesystem_t *fs, const char *path, const struct timespec tv[2]);
+int fs_update_times(filesystem_t *fs,
+                    const char *path,
+                    const struct timespec tv[2]);
 
 // ============================================================================
 // OPERACIONES OPCIONALES (para challenges)

@@ -5,27 +5,27 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <stddef.h>
-#include <stdlib.h>     
+#include <stdlib.h>
 
 bool
 persistence_file_exists(const char *filepath)
-{	
+{
 	// Your code here: Verificar si el archivo existe
 	// Hint: usar stat() y verificar el retorno
 
 	if (!filepath)
 		return false;
-	
+
 	struct stat st;
 	return stat(filepath, &st) == 0;
 }
 
 bool
 persistence_is_valid(const char *filepath)
-{	
+{
 	if (!persistence_file_exists(filepath))
 		return false;
-	
+
 	// Your code here: Verificar que el archivo tenga el magic number correcto
 	// 1. Abrir archivo en modo lectura binaria "rb"
 	// 2. Leer los primeros 4 bytes
@@ -35,11 +35,11 @@ persistence_is_valid(const char *filepath)
 	FILE *f = fopen(filepath, "rb");
 	if (!f)
 		return false;
-	
+
 	char magic[5] = { 0 };
 	size_t read = fread(magic, 1, 4, f);
 	fclose(f);
-	
+
 	return read == 4 && strcmp(magic, MAGIC_NUMBER) == 0;
 }
 
@@ -57,16 +57,20 @@ persistence_save(const char *filename, const filesystem_t *fs)
 	// 4. Escribir fs->entry_count (int)
 	// 5. Escribir fs->used_space (size_t)
 	// 6. Para cada entrada (i = 0 hasta entry_count):
-	//    a. Escribir metadatos usando fwrite(entry, offsetof(fs_entry_t, data), 1, file)
-	//    b. Si es archivo y tiene data:
-	//       - Escribir entry->data usando fwrite(entry->data, entry->size, 1, file)
+	//    a. Escribir metadatos usando fwrite(entry, offsetof(fs_entry_t,
+	//    data), 1, file) b. Si es archivo y tiene data:
+	//       - Escribir entry->data usando fwrite(entry->data, entry->size,
+	//       1, file)
 	// 7. Cerrar archivo
 	// 8. Manejar errores en cada fwrite (retornar -EIO si falla)
 	// 9. Retornar 0 si éxito
 
 	FILE *file = fopen(filename, "wb");
 	if (!file) {
-		fprintf(stderr, "[error] persistence_save: cannot open %s: %s\n", filename, strerror(errno));
+		fprintf(stderr,
+		        "[error] persistence_save: cannot open %s: %s\n",
+		        filename,
+		        strerror(errno));
 		return -errno;
 	}
 
@@ -106,7 +110,8 @@ persistence_save(const char *filename, const filesystem_t *fs)
 		}
 
 		// Si es archivo y tiene contenido, escribir los datos
-		if (entry->type == ENTRY_FILE && entry->data != NULL && entry->size > 0) {
+		if (entry->type == ENTRY_FILE && entry->data != NULL &&
+		    entry->size > 0) {
 			if (fwrite(entry->data, entry->size, 1, file) != 1) {
 				fclose(file);
 				return -EIO;
@@ -115,8 +120,10 @@ persistence_save(const char *filename, const filesystem_t *fs)
 	}
 
 	fclose(file);
-	printf("[info] Filesystem saved to %s (%d entries)\n", filename, fs->entry_count);
-	
+	printf("[info] Filesystem saved to %s (%d entries)\n",
+	       filename,
+	       fs->entry_count);
+
 	return 0;
 }
 
@@ -130,7 +137,8 @@ persistence_load(const char *filename, filesystem_t *fs)
 
 	// Si el archivo no existe, inicializar filesystem nuevo
 	if (!persistence_file_exists(filename)) {
-		printf("[info] Persistence file not found, creating new filesystem\n");
+		printf("[info] Persistence file not found, creating new "
+		       "filesystem\n");
 		return fs_init(fs);
 	}
 
@@ -164,7 +172,10 @@ persistence_load(const char *filename, filesystem_t *fs)
 
 	FILE *file = fopen(filename, "rb");
 	if (!file) {
-		fprintf(stderr, "[error] persistence_load: cannot open %s: %s\n", filename, strerror(errno));
+		fprintf(stderr,
+		        "[error] persistence_load: cannot open %s: %s\n",
+		        filename,
+		        strerror(errno));
 		return -errno;
 	}
 
@@ -218,12 +229,13 @@ persistence_load(const char *filename, filesystem_t *fs)
 	// Leer cada entrada
 	for (int i = 0; i < entry_count; i++) {
 		fs_entry_t *entry = &fs->entries[i];
-		
+
 		// Leer metadatos
 		if (fread(entry, offsetof(fs_entry_t, data), 1, file) != 1) {
 			// Error: liberar memoria ya alocada
 			for (int j = 0; j < i; j++) {
-				if (fs->entries[j].type == ENTRY_FILE && fs->entries[j].data) {
+				if (fs->entries[j].type == ENTRY_FILE &&
+				    fs->entries[j].data) {
 					free(fs->entries[j].data);
 				}
 			}
@@ -237,19 +249,21 @@ persistence_load(const char *filename, filesystem_t *fs)
 			if (!entry->data) {
 				// Error de memoria: liberar lo ya alocado
 				for (int j = 0; j < i; j++) {
-					if (fs->entries[j].type == ENTRY_FILE && fs->entries[j].data) {
+					if (fs->entries[j].type == ENTRY_FILE &&
+					    fs->entries[j].data) {
 						free(fs->entries[j].data);
 					}
 				}
 				fclose(file);
 				return -ENOMEM;
 			}
-			
+
 			if (fread(entry->data, entry->size, 1, file) != 1) {
 				// Error al leer: liberar todo
 				free(entry->data);
 				for (int j = 0; j < i; j++) {
-					if (fs->entries[j].type == ENTRY_FILE && fs->entries[j].data) {
+					if (fs->entries[j].type == ENTRY_FILE &&
+					    fs->entries[j].data) {
 						free(fs->entries[j].data);
 					}
 				}
@@ -264,8 +278,12 @@ persistence_load(const char *filename, filesystem_t *fs)
 	}
 
 	fclose(file);
-	printf("[info] Filesystem loaded from %s (%d entries, %zu bytes used)\n", filename, fs->entry_count, fs->used_space);
+	printf("[info] Filesystem loaded from %s (%d entries, %zu bytes "
+	       "used)\n",
+	       filename,
+	       fs->entry_count,
+	       fs->used_space);
 
-	
+
 	return 0;
 }

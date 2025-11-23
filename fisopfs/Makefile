@@ -35,3 +35,11 @@ persistence.o: persistence.c persistence.h fs.h
 clean:
 	rm -f $(FS_NAME) $(OBJS) .clang-files
 	rm -rf prueba/
+
+format: .clang-files .clang-format
+	xargs -r clang-format -i < .clang-files
+
+.clang-files:
+	find . -type f \( -name '*.c' -o -name '*.h' \) > .clang-files
+
+.PHONY: build run exec local clean format
